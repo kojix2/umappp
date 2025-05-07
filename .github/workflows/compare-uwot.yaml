@@ -1,4 +1,8 @@
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+  pull_request:
 
 name: uwot comparison
 
@@ -8,33 +12,39 @@ jobs:
     runs-on: ubuntu-latest
     container: bioconductor/bioconductor_docker:devel
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
 
     - name: Get latest CMake
       uses: lukka/get-cmake@latest
 
     - name: Configure the build
-      run: |
-        cmake -S . -B build -DBUILD_TESTING=OFF
+      run: cmake -S . -B build -DBUILD_TESTING=OFF
+
+    - name: Set the package directory
+      run: echo "R_PKG_DIR=${R_HOME}/site-library" >> $GITHUB_ENV
+
+    - name: Restore the package directory
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.R_PKG_DIR }}
+        key: preinstalled-packages
 
     - name: Install packages
       shell: Rscript {0}
       run: |
-        BiocManager::install(c("uwot", "FNN", "Rcpp", "testthat"))
+        BiocManager::install(c("uwot", "BiocNeighbors", "Rcpp", "testthat"))
 
-    - name: Set up the environment
-      run: |
-        cd tests/R
-        bash build.sh
+    - name: Install the test package
+      run: R CMD INSTALL tests/R/package
 
     - name: Run the comparisons
       shell: Rscript {0}
       run: |
-        setwd("tests/R")
-        output <- testthat::test_file("run.R", stop_on_failure=TRUE)
+        setwd("tests/R/package/tests")
+        source("testthat.R")
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       with:
         name: demo-file 
-        path: tests/R/demo.png 
+        path: tests/R/package/tests/testthat/demo.png 
 
